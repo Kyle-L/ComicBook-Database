@@ -15,11 +15,13 @@ This is the repository for the development of a comic book database project in !
 <a name="stored-proc"/></a>
 ## Stored Procedures
 - spAddUpdateDeleteTag
- *  Adds/Updates/Deletes a tag to/from the database.
+	*  Adds/Updates/Deletes a tag to/from the database.
+
 - spAddUpdateDeleteTag
- * Adds/Updates/Deletes a file type to/from the database.
+	* Adds/Updates/Deletes a file type to/from the database.
+
 - spAddUpdateDeleteTag
- * Adds/Updates/Deletes a publisher to/from the database.
+	* Adds/Updates/Deletes a publisher to/from the database.
 
 <a name="license"></a>
 ## License
