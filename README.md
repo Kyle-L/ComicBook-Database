@@ -7,8 +7,8 @@
 
 <a name="overview"/></a>
 ## Overview
-This is the repository for the development of a comic book database project in ![CSE 385 Database Systems](https://www.miamioh.edu/cec/academics/departments/cse/academics/course-descriptions/cse-385/index.html).
-The ![create_comic.sql](create_comic.sql) file contains opertations to create the tables, views, stored procedures, and insert mock data in the database.
+This is the repository for the development of a comic book database project using MSSQL 2019 for ![CSE 385 Database Systems](https://www.miamioh.edu/cec/academics/departments/cse/academics/course-descriptions/cse-385/index.html).
+The ![create_comic.sql](create_comic.sql) file contains the query opertations to create the tables, views, stored procedures, and insert mock data in the database.
 
 <a name="erd"/></a>
 ## Entity Relationship Diagram
