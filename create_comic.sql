@@ -25,84 +25,100 @@ GO
 												CREATE TABLES
 *************************************************************************************************************/
 CREATE TABLE tags (
-	tagId				INT				NOT NULL	PRIMARY KEY		IDENTITY,
-	[description]		VARCHAR(30)		NOT NULL
+	tagId				INT					NOT NULL	PRIMARY KEY		IDENTITY,
+	[description]		VARCHAR(32)			NOT NULL
 );
 GO
 
 CREATE TABLE fileTypes (
-	fileTypeId		INT					NOT NULL	PRIMARY KEY		IDENTITY,
-	[value]			VARCHAR(30)			NOT NULL
+	fileTypeId			INT					NOT NULL	PRIMARY KEY		IDENTITY,
+	[value]				VARCHAR(32)			NOT NULL
 );
 GO
 
 CREATE TABLE publishers (
-	publisherId		INT					NOT NULL	PRIMARY KEY		IDENTITY,
-	[name]			VARCHAR(64)			NOT NULL,
-	isDeleted		BIT					NOT NULL	DEFAULT(0)
+	publisherId			INT					NOT NULL	PRIMARY KEY		IDENTITY,
+	[name]				VARCHAR(64)			NOT NULL,
+	isDeleted			BIT					NOT NULL	DEFAULT(0)
 );
 GO
 
 CREATE TABLE people (
-	personId		INT					NOT NULL	PRIMARY KEY		IDENTITY,
-	fName			VARCHAR(64)			NOT NULL	DEFAULT(''),
-	lName			VARCHAR(64)			NOT NULL,
-	isDeleted		BIT					NOT NULL	DEFAULT(0)
+	personId			INT					NOT NULL	PRIMARY KEY		IDENTITY,
+	fName				VARCHAR(64)			NOT NULL	DEFAULT(''),
+	lName				VARCHAR(64)			NOT NULL,
+	isDeleted			BIT					NOT NULL	DEFAULT(0)
 );
 GO
 
 CREATE TABLE comics (
-	comicId				INT				NOT NULL	PRIMARY KEY		IDENTITY,
-	title				VARCHAR(100)	NOT NULL,
-	filetypeId			INT				NOT NULL	FOREIGN KEY	REFERENCES fileTypes(fileTypeId),
-	publisherId			INT				NOT NULL	FOREIGN KEY	REFERENCES publishers(publisherId),
-	publicationDate		DATE			NOT NULL,
-	[description]		VARCHAR(2048)	NOT NULL	DEFAULT(''),
-	notes				VARCHAR(1024)	NOT NULL	DEFAULT(''),
-	filePath			VARCHAR(256)	NOT NULL,
-	isDeleted			BIT				NOT NULL	DEFAULT(0)
+	comicId				INT					NOT NULL	PRIMARY KEY		IDENTITY,
+	title				VARCHAR(128)		NOT NULL,
+	filetypeId			INT					NOT NULL	FOREIGN KEY	REFERENCES fileTypes(fileTypeId),
+	publisherId			INT					NOT NULL	FOREIGN KEY	REFERENCES publishers(publisherId),
+	publicationDate		DATE				NOT NULL,
+	[description]		VARCHAR(2048)		NOT NULL	DEFAULT(''),
+	notes				VARCHAR(1024)		NOT NULL	DEFAULT(''),
+	filePath			VARCHAR(256)		NOT NULL,
+	isDeleted			BIT					NOT NULL	DEFAULT(0)
 );
 GO
 
 CREATE TABLE comicAuthors (
-	comicId			INT		NOT NULL	FOREIGN KEY	REFERENCES comics(comicId),
-	authorId		INT		NOT NULL	FOREIGN KEY	REFERENCES people(personId),
+	comicId				INT					NOT NULL	FOREIGN KEY	REFERENCES comics(comicId),
+	authorId			INT					NOT NULL	FOREIGN KEY	REFERENCES people(personId),
 	PRIMARY KEY (comicId, authorId)
 );
 GO
 
 CREATE TABLE comicIllustrators (
-	comicId			INT		NOT NULL	FOREIGN KEY	REFERENCES comics(comicId),
-	illustratorId	INT		NOT NULL	FOREIGN KEY	REFERENCES people(personId),
+	comicId				INT					NOT NULL	FOREIGN KEY	REFERENCES comics(comicId),
+	illustratorId		INT					NOT NULL	FOREIGN KEY	REFERENCES people(personId),
 	PRIMARY KEY (comicId, illustratorId)
 );
 GO
 
 CREATE TABLE comicTags (
-	comicId			INT		NOT NULL	FOREIGN KEY	REFERENCES comics(comicId),
-	tagId			INT		NOT NULL	FOREIGN KEY	REFERENCES tags(tagId),
+	comicId				INT					NOT NULL	FOREIGN KEY	REFERENCES comics(comicId),
+	tagId				INT					NOT NULL	FOREIGN KEY	REFERENCES tags(tagId),
 	PRIMARY KEY (comicId, tagId)
+);
+GO
+
+CREATE TABLE errors (
+	errorId 			INT					NOT NULL	PRIMARY KEY		IDENTITY,
+	[ERROR_NUMBER]		INT					NOT NULL,
+	[ERROR_SEVERITY] 	INT					NOT NULL,
+	[ERROR_STATE] 		INT					NOT NULL,
+	[ERROR_PROCEDURE] 	VARCHAR(64)			NOT NULL,
+	[ERROR_LINE]		INT					NOT NULL,
+	[ERROR_MESSAGE] 	VARCHAR(512)		NOT NULL,
+	errorDate 			DATETIME			NOT NULL	DEFAULT(GETDATE()),
+	resolvedOn			DATETIME			NULL,
+	comments			VARCHAR(MAX)		NOT NULL	DEFAULT(''),
+	userName			VARCHAR(128)		NOT NULL	DEFAULT(''),
+	params				VARCHAR(MAX)		NOT NULL	DEFAULT('')
 );
 GO
 
 /************************************************************************************************************  
 												CREATE VIEWS
 *************************************************************************************************************/
-CREATE VIEW vwPublishers AS 
+CREATE VIEW vwPublishers AS
 	SELECT publisherId, [name]
-		FROM publishers 
+	FROM publishers 
 	WHERE isDeleted = 0
 GO
 
-CREATE VIEW vwPeople AS 
+CREATE VIEW vwPeople AS
 	SELECT personId, fName, lName
-		FROM people 
+	FROM people 
 	WHERE isDeleted = 0
 GO
 
 CREATE VIEW vwComics AS 
 	SELECT comicId, title, filetypeId, publisherId, publicationDate, [description], notes, filePath
-		FROM comics 
+	FROM comics 
 	WHERE isDeleted = 0
 GO
 
@@ -112,18 +128,39 @@ GO
 
 /* =====================================================================
 
+	Name:           spSave_Error
+	Purpose:        Saves an error to the database.
+
+======================================================================== */
+CREATE PROCEDURE spSave_Error
+	@params varchar(MAX) = ''
+AS
+BEGIN
+
+     BEGIN TRY
+
+    	INSERT INTO errors (ERROR_NUMBER,   ERROR_SEVERITY,   ERROR_STATE,   ERROR_PROCEDURE,   ERROR_LINE,   ERROR_MESSAGE, userName, params)
+			VALUES (ERROR_NUMBER(), ERROR_SEVERITY(), ERROR_STATE(), ERROR_PROCEDURE(), ERROR_LINE(), ERROR_MESSAGE(), SUSER_NAME(), @params)
+     
+	 END TRY BEGIN CATCH END CATCH
+
+END
+GO
+
+/* =====================================================================
+
 	Name:           spAddUpdateDeleteTag
 	Purpose:        Adds/Updates/Deletes a tag to/from the database.
 
 ======================================================================== */
 CREATE PROCEDURE spAddUpdateDeleteTag
 	@tagId					INT,
-	@description			VARCHAR(30),
+	@description			VARCHAR(32),
 	@delete					BIT = 0
 AS BEGIN
 
 	BEGIN TRY
-		IF(@tagId = 0) BEGIN			-- ADD TAG
+		IF(@tagId = 0) BEGIN							-- ADD TAG
 			
 			INSERT	INTO tags([description]) 
 					VALUES (@description)
@@ -131,7 +168,7 @@ AS BEGIN
 			SELECT	@@IDENTITY AS tagId,
 					[success] = CAST(1 AS BIT)
 
-		END ELSE IF(@delete = 1) BEGIN	-- DELETE TAG
+		END ELSE IF(@delete = 1) BEGIN					-- DELETE TAG
 
 			IF NOT EXISTS (SELECT NULL FROM tags WHERE tagId = @tagId) BEGIN
 				SELECT	[message] = 'That tagId does not exist.', 
@@ -144,7 +181,7 @@ AS BEGIN
 
 			END
 
-		END ELSE BEGIN					-- UPDATE TAG
+		END ELSE BEGIN									-- UPDATE TAG
 
 			IF NOT EXISTS (SELECT NULL FROM tags WHERE tagId = @tagId) BEGIN
 				SELECT	[message] = 'That tagId does not exist.', 
@@ -163,6 +200,11 @@ AS BEGIN
 	END TRY BEGIN CATCH
 
 		IF(@@TRANCOUNT > 0) ROLLBACK TRAN
+		DECLARE @errorParams VARCHAR(MAX) = CONCAT(	'@tagId = ', @tagId,
+													', @description = ', @description,
+													', @delete = ', @delete
+													)
+		EXEC spSave_Error @params = @errorParams
 
 	END CATCH
 
@@ -173,18 +215,18 @@ GO
 
 /* =====================================================================
 
-	Name:           spAddUpdateDeleteTag
+	Name:           spAddUpdateDeleteFileType
 	Purpose:        Adds/Updates/Deletes a file type to/from the database.
 
 ======================================================================== */
 CREATE PROCEDURE spAddUpdateDeleteFileType
 	@fileTypeId				INT,
-	@value					VARCHAR(30),
+	@value					VARCHAR(32),
 	@delete					BIT = 0
 AS BEGIN
 
 	BEGIN TRY
-		IF(@fileTypeId = 0) BEGIN			-- ADD FILETYPE
+		IF(@fileTypeId = 0) BEGIN						-- ADD FILETYPE
 			
 			INSERT	INTO fileTypes([value]) 
 					VALUES (@value)
@@ -192,20 +234,20 @@ AS BEGIN
 			SELECT	@@IDENTITY AS fileTypeId,
 					[success] = CAST(1 AS BIT)
 
-		END ELSE IF(@delete = 1) BEGIN		-- DELETE FILETYPE
+		END ELSE IF(@delete = 1) BEGIN					-- DELETE FILETYPE
 
 			IF NOT EXISTS (SELECT NULL FROM fileTypes WHERE fileTypeId = @fileTypeId) BEGIN
 				SELECT	[message] = 'That fileTypeId does not exist.', 
 						[success] = CAST(0 AS BIT)
 			END ELSE BEGIN
 
-			DELETE FROM fileTypes WHERE fileTypeId = @fileTypeId
-			SELECT	0 AS fileTypeId,
-					[success] = CAST(1 AS BIT)
+				DELETE FROM fileTypes WHERE fileTypeId = @fileTypeId
+				SELECT	0 AS fileTypeId,
+						[success] = CAST(1 AS BIT)
 
 			END
 
-		END ELSE BEGIN						-- UPDATE FILETYPE
+		END ELSE BEGIN									-- UPDATE FILETYPE
 
 			IF NOT EXISTS (SELECT NULL FROM fileTypes WHERE fileTypeId = @fileTypeId) BEGIN
 				SELECT	[message] = 'That fileTypeId does not exist.', 
@@ -225,6 +267,11 @@ AS BEGIN
 	END TRY BEGIN CATCH
 
 		IF(@@TRANCOUNT > 0) ROLLBACK TRAN
+		DECLARE @errorParams VARCHAR(MAX) = CONCAT(	'@fileTypeId = ', @fileTypeId,
+													', @value = ', @value,
+													', @delete = ', @delete
+													)
+		EXEC spSave_Error @params = @errorParams
 
 	END CATCH
 
@@ -235,7 +282,7 @@ GO
 
 /* =====================================================================
 
-	Name:           spAddUpdateDeleteTag
+	Name:           spAddUpdateDeletePublisher
 	Purpose:        Adds/Updates/Deletes a publisher to/from the database.
 
 ======================================================================== */
@@ -245,53 +292,58 @@ CREATE PROCEDURE spAddUpdateDeletePublisher
 	@delete					BIT = 0
 AS BEGIN
 
-BEGIN TRY
-	IF(@publisherId = 0) BEGIN			-- ADD PUBLISHER
+	BEGIN TRY
+		IF(@publisherId = 0) BEGIN						-- ADD PUBLISHER
 			
-		INSERT	INTO publishers([name]) 
-				VALUES (@name)
-		SELECT	@@IDENTITY AS publisherId,
-				[success] = CAST(1 AS BIT)
-
-	END ELSE IF(@delete = 1) BEGIN		-- SOFT DELETE PUBLISHER
-
-		IF NOT EXISTS (SELECT NULL FROM publishers WHERE publisherId = @publisherId) BEGIN
-			SELECT	[message] = 'That publisherId does not exist.', 
-					[success] = CAST(0 AS BIT)
-		END ELSE BEGIN
-
-			UPDATE publishers
-			SET isDeleted = 1
-			WHERE publisherId = @publisherId
-			SELECT	0 AS publisherId,
+			INSERT	INTO publishers([name]) 
+					VALUES (@name)
+			SELECT	@@IDENTITY AS publisherId,
 					[success] = CAST(1 AS BIT)
 
-		END
+		END ELSE IF(@delete = 1) BEGIN					-- SOFT DELETE PUBLISHER
 
-	END ELSE BEGIN						-- UPDATE PUBLISHER
+			IF NOT EXISTS (SELECT NULL FROM publishers WHERE publisherId = @publisherId) BEGIN
+				SELECT	[message] = 'That publisherId does not exist.', 
+						[success] = CAST(0 AS BIT)
+			END ELSE BEGIN
 
-		IF NOT EXISTS (SELECT NULL FROM publishers WHERE publisherId = @publisherId) BEGIN
-			SELECT	[message] = 'That publisherId does not exist.', 
-					[success] = CAST(0 AS BIT)
-		END ELSE BEGIN
+				UPDATE publishers
+				SET isDeleted = 1
+				WHERE publisherId = @publisherId
+				SELECT	0 AS publisherId,
+						[success] = CAST(1 AS BIT)
+
+			END
+
+		END ELSE BEGIN									-- UPDATE PUBLISHER
+
+			IF NOT EXISTS (SELECT NULL FROM publishers WHERE publisherId = @publisherId) BEGIN
+				SELECT	[message] = 'That publisherId does not exist.', 
+						[success] = CAST(0 AS BIT)
+			END ELSE BEGIN
 		
-			UPDATE publishers
-			SET [name] = @name
-			WHERE publisherId = @publisherId
-			SELECT	@publisherId AS publisherId,
-					[success] = CAST(1 AS BIT)
+				UPDATE publishers
+				SET [name] = @name
+				WHERE publisherId = @publisherId
+				SELECT	@publisherId AS publisherId,
+						[success] = CAST(1 AS BIT)
+
+			END
 
 		END
 
-	END
+	END TRY BEGIN CATCH
 
-END TRY BEGIN CATCH
+		IF(@@TRANCOUNT > 0) ROLLBACK TRAN
+		DECLARE @errorParams VARCHAR(MAX) = CONCAT(	'@publisherId = ', @publisherId,
+													', @name = ', @name,
+													', @delete = ', @delete
+													)
+		EXEC spSave_Error @params = @errorParams
 
-	IF(@@TRANCOUNT > 0) ROLLBACK TRAN
+	END CATCH
 
-END CATCH
-
-IF(@@TRANCOUNT > 0) COMMIT TRAN
+	IF(@@TRANCOUNT > 0) COMMIT TRAN
 
 END
 GO
@@ -306,43 +358,45 @@ CREATE PROCEDURE spHardDeletePublisher
 	@publisherId			INT = 0
 AS BEGIN
 
-BEGIN TRY
-	IF(@publisherId = 0) BEGIN		-- HARD DELETE ALL PUBLISHER MARKED AS ISDELETED
-
-		DELETE FROM publishers
-		WHERE isDeleted = 1
-		SELECT [success] = CAST(1 AS BIT)
-
-	END ELSE BEGIN					-- HARD DELETE A SPECIFIC PUBLISHER
-
-		IF NOT EXISTS (SELECT NULL FROM publishers WHERE publisherId = @publisherId) BEGIN
-			SELECT	[message] = 'That publisherId does not exist.', 
-					[success] = CAST(0 AS BIT)
-		END ELSE BEGIN
+	BEGIN TRY
+		IF(@publisherId = 0) BEGIN						-- HARD DELETE ALL PUBLISHER MARKED AS ISDELETED
 
 			DELETE FROM publishers
-			WHERE publisherId = @publisherId
-			SELECT	0 AS publisherId,
-					[success] = CAST(1 AS BIT)
+			WHERE isDeleted = 1
+			SELECT [success] = CAST(1 AS BIT)
+
+		END ELSE BEGIN									-- HARD DELETE A SPECIFIC PUBLISHER
+
+			IF NOT EXISTS (SELECT NULL FROM publishers WHERE publisherId = @publisherId) BEGIN
+				SELECT	[message] = 'That publisherId does not exist.', 
+						[success] = CAST(0 AS BIT)
+			END ELSE BEGIN
+
+				DELETE FROM publishers
+				WHERE publisherId = @publisherId
+				SELECT	0 AS publisherId,
+						[success] = CAST(1 AS BIT)
+
+			END
 
 		END
 
-	END
+	END TRY BEGIN CATCH
 
-END TRY BEGIN CATCH
+		IF(@@TRANCOUNT > 0) ROLLBACK TRAN
+		DECLARE @errorParams VARCHAR(MAX) = CONCAT('@publisherId = ', @publisherId)
+		EXEC spSave_Error @params = @errorParams
 
-	IF(@@TRANCOUNT > 0) ROLLBACK TRAN
+	END CATCH
 
-END CATCH
-
-IF(@@TRANCOUNT > 0) COMMIT TRAN
+	IF(@@TRANCOUNT > 0) COMMIT TRAN
 
 END
 GO
 
 /* =====================================================================
 
-	Name:           spAddUpdateDeleteTag
+	Name:           spAddUpdateDeletePerson
 	Purpose:        Adds/Updates/Deletes a person to/from the database.
 
 ======================================================================== */
@@ -353,53 +407,59 @@ CREATE PROCEDURE spAddUpdateDeletePerson
 	@delete				BIT = 0
 AS BEGIN
 
-BEGIN TRY
-	IF(@personId = 0) BEGIN				-- ADD PERSON
+	BEGIN TRY
+		IF(@personId = 0) BEGIN							-- ADD PERSON
 			
-		INSERT	INTO people(fName, lName) 
-				VALUES (@fName, @lName)
-		SELECT	@@IDENTITY AS personId,
-				[success] = CAST(1 AS BIT)
-
-	END ELSE IF(@delete = 1) BEGIN		-- SOFT DELETE PERSON
-
-		IF NOT EXISTS (SELECT NULL FROM people WHERE personId = @personId) BEGIN
-			SELECT	[message] = 'That personId does not exist.', 
-					[success] = CAST(0 AS BIT)
-		END ELSE BEGIN
-
-			UPDATE people
-			SET isDeleted = 1
-			WHERE personId = @personId
-			SELECT	0 AS personId,
+			INSERT	INTO people(fName, lName) 
+					VALUES (@fName, @lName)
+			SELECT	@@IDENTITY AS personId,
 					[success] = CAST(1 AS BIT)
+
+		END ELSE IF(@delete = 1) BEGIN					-- SOFT DELETE PERSON
+
+			IF NOT EXISTS (SELECT NULL FROM people WHERE personId = @personId) BEGIN
+				SELECT	[message] = 'That personId does not exist.', 
+						[success] = CAST(0 AS BIT)
+			END ELSE BEGIN
+
+				UPDATE people
+				SET isDeleted = 1
+				WHERE personId = @personId
+				SELECT	0 AS personId,
+						[success] = CAST(1 AS BIT)
+
+			END
+
+		END ELSE BEGIN									-- UPDATE PERSON
+
+			IF NOT EXISTS (SELECT NULL FROM people WHERE personId = @personId) BEGIN
+				SELECT	[message] = 'That personId does not exist.', 
+						[success] = CAST(0 AS BIT)
+			END ELSE BEGIN
+
+				UPDATE people
+				SET fName = @fName, lName = @lName
+				WHERE personId = @personId
+				SELECT	@personId AS personId,
+						[success] = CAST(1 AS BIT)
+
+			END
 
 		END
 
-	END ELSE BEGIN						-- UPDATE PERSON
+	END TRY BEGIN CATCH
 
-		IF NOT EXISTS (SELECT NULL FROM people WHERE personId = @personId) BEGIN
-			SELECT	[message] = 'That personId does not exist.', 
-					[success] = CAST(0 AS BIT)
-		END ELSE BEGIN
+		IF(@@TRANCOUNT > 0) ROLLBACK TRAN
+		DECLARE @errorParams VARCHAR(MAX) = CONCAT(	'@personId = ', @personId,
+													', @fName = ', @fName,
+													', @lName = ', @lName,
+													', @delete = ', @delete
+													)
+		EXEC spSave_Error @params = @errorParams
 
-			UPDATE people
-			SET fName = @fName, lName = @lName
-			WHERE personId = @personId
-			SELECT	@personId AS personId,
-					[success] = CAST(1 AS BIT)
+	END CATCH
 
-		END
-
-	END
-
-END TRY BEGIN CATCH
-
-	IF(@@TRANCOUNT > 0) ROLLBACK TRAN
-
-END CATCH
-
-IF(@@TRANCOUNT > 0) COMMIT TRAN
+	IF(@@TRANCOUNT > 0) COMMIT TRAN
 
 END
 GO
@@ -414,43 +474,44 @@ CREATE PROCEDURE spHardDeletePerson
 	@personId			INT = 0
 AS BEGIN
 
-BEGIN TRY
-	IF(@personId = 0) BEGIN		-- HARD DELETE ALL PEOPLE MARKED AS ISDELETED
-
-		DELETE FROM people
-		WHERE isDeleted = 1
-		SELECT [success] = CAST(1 AS BIT)
-
-	END ELSE BEGIN					-- HARD DELETE A SPECIFIC PERSON
-
-		IF NOT EXISTS (SELECT NULL FROM people WHERE personId = @personId) BEGIN
-			SELECT	[message] = 'That personId does not exist.', 
-					[success] = CAST(0 AS BIT)
-		END ELSE BEGIN
+	BEGIN TRY
+		IF(@personId = 0) BEGIN							-- HARD DELETE ALL PEOPLE MARKED AS ISDELETED
 
 			DELETE FROM people
-			WHERE personId = @personId
-			SELECT	0 AS personId,
-					[success] = CAST(1 AS BIT)
+			WHERE isDeleted = 1
+			SELECT [success] = CAST(1 AS BIT)
+
+		END ELSE BEGIN									-- HARD DELETE A SPECIFIC PERSON
+
+			IF NOT EXISTS (SELECT NULL FROM people WHERE personId = @personId) BEGIN
+				SELECT	[message] = 'That personId does not exist.', 
+						[success] = CAST(0 AS BIT)
+			END ELSE BEGIN
+
+				DELETE FROM people
+				WHERE personId = @personId
+				SELECT	0 AS personId,
+						[success] = CAST(1 AS BIT)
+
+			END
 
 		END
 
-	END
+	END TRY BEGIN CATCH
 
-END TRY BEGIN CATCH
+		IF(@@TRANCOUNT > 0) ROLLBACK TRAN
+		DECLARE @errorParams VARCHAR(MAX) = CONCAT('@personId = ', @personId)
 
-	IF(@@TRANCOUNT > 0) ROLLBACK TRAN
+	END CATCH
 
-END CATCH
-
-IF(@@TRANCOUNT > 0) COMMIT TRAN
+	IF(@@TRANCOUNT > 0) COMMIT TRAN
 
 END
 GO
 
 /* =====================================================================
 
-	Name:           spAddUpdateDeleteTag
+	Name:           spAddUpdateDeleteComic
 	Purpose:        Adds/Updates/Deletes a comic to/from the database.
 
 ======================================================================== */
@@ -466,57 +527,68 @@ CREATE PROCEDURE spAddUpdateDeleteComic
 	@delete				BIT	= 0			
 AS BEGIN
 
-BEGIN TRY
-	IF(@comicId = 0) BEGIN				-- ADD COMIC
+	BEGIN TRY
+		IF(@comicId = 0) BEGIN							-- ADD COMIC
 			
-		INSERT	INTO comics(title, filetypeId, publisherId, publicationDate, [description], notes, filePath) 
-				VALUES (@title, @filetypeId, @publisherId, @publicationDate, @description, @notes, @filePath)
-		SELECT	@@IDENTITY AS comicId,
-				[success] = CAST(1 AS BIT)
-
-	END ELSE IF(@delete = 1) BEGIN		-- SOFT DELETE COMIC
-
-		IF NOT EXISTS (SELECT NULL FROM comics WHERE comicId = @comicId) BEGIN
-			SELECT	[message] = 'That comicId does not exist.', 
-					[success] = CAST(0 AS BIT)
-		END ELSE BEGIN
-
-			UPDATE comics
-			SET isDeleted = 1
-			WHERE comicId = @comicId
-			SELECT	0 AS personId,
+			INSERT	INTO comics(title, filetypeId, publisherId, publicationDate, [description], notes, filePath) 
+					VALUES (@title, @filetypeId, @publisherId, @publicationDate, @description, @notes, @filePath)
+			SELECT	@@IDENTITY AS comicId,
 					[success] = CAST(1 AS BIT)
+
+		END ELSE IF(@delete = 1) BEGIN					-- SOFT DELETE COMIC
+
+			IF NOT EXISTS (SELECT NULL FROM comics WHERE comicId = @comicId) BEGIN
+				SELECT	[message] = 'That comicId does not exist.', 
+						[success] = CAST(0 AS BIT)
+			END ELSE BEGIN
+
+				UPDATE comics
+				SET isDeleted = 1
+				WHERE comicId = @comicId
+				SELECT	0 AS comicId,
+						[success] = CAST(1 AS BIT)
+
+			END
+
+		END ELSE BEGIN									-- UPDATE COMIC
+
+			IF NOT EXISTS (SELECT NULL FROM comics WHERE comicId = @comicId) BEGIN
+				SELECT	[message] = 'That comicId does not exist.', 
+						[success] = CAST(0 AS BIT)
+			END ELSE IF NOT EXISTS (SELECT NULL FROM fileTypes WHERE fileTypeId = @filetypeId) BEGIN
+				SELECT	[message] = 'That fileTypeId does not exist.', 
+						[success] = CAST(0 AS BIT)
+			END ELSE IF NOT EXISTS (SELECT NULL FROM publishers WHERE publisherId = @publisherId) BEGIN
+				SELECT	[message] = 'That publisherId does not exist.', 
+						[success] = CAST(0 AS BIT)
+			END ELSE BEGIN
+
+				UPDATE comics
+				SET	title = @title, filetypeId = @filetypeId, publisherId = @publisherId, publicationDate = @publicationDate, 
+					[description] = @description, notes = @notes, filePath = @filePath
+				WHERE comicId = @comicId
+				SELECT	@comicId AS comicId,
+						[success] = CAST(1 AS BIT)
+			END
 
 		END
 
-	END ELSE BEGIN						-- UPDATE COMIC
+	END TRY BEGIN CATCH
 
-		IF NOT EXISTS (SELECT NULL FROM comics WHERE comicId = @comicId) BEGIN
-			SELECT	[message] = 'That comicId does not exist.', 
-					[success] = CAST(0 AS BIT)
-		END ELSE IF NOT EXISTS (SELECT NULL FROM fileTypes WHERE fileTypeId = @filetypeId) BEGIN
-			SELECT	[message] = 'That fileTypeId does not exist.', 
-					[success] = CAST(0 AS BIT)
-		END ELSE IF NOT EXISTS (SELECT NULL FROM publishers WHERE publisherId = @publisherId) BEGIN
-			SELECT	[message] = 'That publisherId does not exist.', 
-					[success] = CAST(0 AS BIT)
-		END ELSE BEGIN
+		IF(@@TRANCOUNT > 0) ROLLBACK TRAN
+		DECLARE @errorParams VARCHAR(MAX) = CONCAT(	'@comicId = ', @comicId,
+													', @title = ', @title,
+													', @filetypeId = ', @filetypeId,
+													', @publisherId = ', @publisherId,
+													', @publicationDate = ', @publicationDate,
+													', @description = ', @description,
+													', @notes = ', @notes,
+													', @filePath = ', @filePath,
+													', @delete = ', @delete
+													)
+		EXEC spSave_Error @params = @errorParams
 
-			UPDATE comics
-			SET	title = @title, filetypeId = @filetypeId, publisherId = @publisherId, publicationDate = @publicationDate, 
-				[description] = @description, notes = @notes, filePath = @filePath
-			WHERE comicId = @comicId
-			SELECT	@comicId AS comicId,
-					[success] = CAST(1 AS BIT)
-		END
-
-	END
-
-END TRY BEGIN CATCH
-
-	IF(@@TRANCOUNT > 0) ROLLBACK TRAN
-
-END CATCH
+	END CATCH
 
 	IF(@@TRANCOUNT > 0) COMMIT TRAN
 
@@ -533,36 +605,38 @@ CREATE PROCEDURE spHardDeleteComic
 	@comicId			INT = 0
 AS BEGIN
 
-BEGIN TRY
-	IF(@comicId = 0) BEGIN		-- HARD DELETE ALL COMICS MARKED AS ISDELETED
-
-		DELETE FROM comics
-		WHERE isDeleted = 1
-		SELECT [success] = CAST(1 AS BIT)
-
-	END ELSE BEGIN					-- HARD DELETE A SPECIFIC COMIC
-
-		IF NOT EXISTS (SELECT NULL FROM comics WHERE comicId = @comicId) BEGIN
-			SELECT	[message] = 'That comicId does not exist.', 
-					[success] = CAST(0 AS BIT)
-		END ELSE BEGIN
+	BEGIN TRY
+		IF(@comicId = 0) BEGIN							-- HARD DELETE ALL COMICS MARKED AS ISDELETED
 
 			DELETE FROM comics
-			WHERE comicId = @comicId
-			SELECT	0 AS comicId,
-					[success] = CAST(1 AS BIT)
+			WHERE isDeleted = 1
+			SELECT [success] = CAST(1 AS BIT)
+
+		END ELSE BEGIN									-- HARD DELETE A SPECIFIC COMIC
+
+			IF NOT EXISTS (SELECT NULL FROM comics WHERE comicId = @comicId) BEGIN
+				SELECT	[message] = 'That comicId does not exist.', 
+						[success] = CAST(0 AS BIT)
+			END ELSE BEGIN
+
+				DELETE FROM comics
+				WHERE comicId = @comicId
+				SELECT	0 AS comicId,
+						[success] = CAST(1 AS BIT)
+
+			END
 
 		END
 
-	END
+	END TRY BEGIN CATCH
 
-END TRY BEGIN CATCH
+		IF(@@TRANCOUNT > 0) ROLLBACK TRAN
+		DECLARE @errorParams VARCHAR(MAX) = CONCAT('@comicId = ', @comicId)
+		EXEC spSave_Error @params = @errorParams
 
-	IF(@@TRANCOUNT > 0) ROLLBACK TRAN
+	END CATCH
 
-END CATCH
-
-IF(@@TRANCOUNT > 0) COMMIT TRAN
+	IF(@@TRANCOUNT > 0) COMMIT TRAN
 
 END
 GO
@@ -580,7 +654,7 @@ CREATE PROCEDURE spAddDeleteComicAuthor
  AS BEGIN
 
 	BEGIN TRY
-		IF(@delete = 0) BEGIN	-- ADD COMIC AUTHOR
+		IF(@delete = 0) BEGIN							-- ADD COMIC AUTHOR
 
 			IF NOT EXISTS (SELECT NULL FROM people WHERE personId = @personId) BEGIN
 				SELECT	[message] = 'That personId does not exist.', 
@@ -601,7 +675,7 @@ CREATE PROCEDURE spAddDeleteComicAuthor
 
 			END
 
-		END ELSE BEGIN				-- DELETE COMIC AUTHOR
+		END ELSE BEGIN									-- DELETE COMIC AUTHOR
 
 			IF NOT EXISTS (SELECT NULL FROM people WHERE personId = @personId) BEGIN
 				SELECT	[message] = 'That personId does not exist.', 
@@ -613,6 +687,9 @@ CREATE PROCEDURE spAddDeleteComicAuthor
 
 				DELETE FROM comicAuthors
 				WHERE authorId = @personId AND comicId = @comicId
+				SELECT	0 AS personId,
+						0 AS comicId,
+						[success] = CAST(1 AS BIT)
 
 			END
 		END
@@ -620,6 +697,11 @@ CREATE PROCEDURE spAddDeleteComicAuthor
 	END TRY BEGIN CATCH
 
 		IF(@@TRANCOUNT > 0) ROLLBACK TRAN
+		DECLARE @errorParams VARCHAR(MAX) = CONCAT(	'@personId = ', @personId,
+													', @comicId = ', @comicId,
+													', @delete = ', @delete
+													)
+		EXEC spSave_Error @params = @errorParams
 
 	END CATCH
 
@@ -641,7 +723,7 @@ CREATE PROCEDURE spAddDeleteComicIllustrator
  AS BEGIN
 
 	BEGIN TRY
-		IF(@delete = 0) BEGIN	-- ADD COMIC ILLUSTRATOR
+		IF(@delete = 0) BEGIN							-- ADD COMIC ILLUSTRATOR
 
 			IF NOT EXISTS (SELECT NULL FROM people WHERE personId = @personId) BEGIN
 				SELECT	[message] = 'That personId does not exist.', 
@@ -656,13 +738,13 @@ CREATE PROCEDURE spAddDeleteComicIllustrator
 
 				INSERT	INTO comicIllustrators(illustratorId, comicId) 
 				VALUES (@personId, @comicId)
-				SELECT	@personId AS authorId,
+				SELECT	@personId AS illustratorId,
 						@comicId AS comicId,
 						[success] = CAST(1 AS BIT)
 
 			END
 
-		END ELSE BEGIN				-- DELETE COMIC ILLUSTRATOR
+		END ELSE BEGIN									-- DELETE COMIC ILLUSTRATOR
 
 			IF NOT EXISTS (SELECT NULL FROM people WHERE personId = @personId) BEGIN
 				SELECT	[message] = 'That personId does not exist.', 
@@ -674,6 +756,9 @@ CREATE PROCEDURE spAddDeleteComicIllustrator
 
 				DELETE FROM comicIllustrators
 				WHERE illustratorId = @personId AND comicId = @comicId
+				SELECT	0 AS personId,
+						0 AS comicId,
+						[success] = CAST(1 AS BIT)
 
 			END
 		END
@@ -681,6 +766,11 @@ CREATE PROCEDURE spAddDeleteComicIllustrator
 	END TRY BEGIN CATCH
 
 		IF(@@TRANCOUNT > 0) ROLLBACK TRAN
+		DECLARE @errorParams VARCHAR(MAX) = CONCAT(	'@personId = ', @personId,
+													', @comicId = ', @comicId,
+													', @delete = ', @delete
+													)
+		EXEC spSave_Error @params = @errorParams
 
 	END CATCH
 
@@ -702,7 +792,7 @@ CREATE PROCEDURE spAddDeleteComicTag
  AS BEGIN
 
 	BEGIN TRY
-		IF(@delete = 0) BEGIN	-- ADD COMIC TAG
+		IF(@delete = 0) BEGIN							-- ADD COMIC TAG
 
 			IF NOT EXISTS (SELECT NULL FROM comics WHERE comicId = @comicId) BEGIN
 				SELECT	[message] = 'That comicId does not exist.', 
@@ -723,7 +813,7 @@ CREATE PROCEDURE spAddDeleteComicTag
 
 			END
 
-		END ELSE BEGIN				-- DELETE COMIC TAG
+		END ELSE BEGIN									-- DELETE COMIC TAG
 
 			IF NOT EXISTS (SELECT NULL FROM comics WHERE comicId = @comicId) BEGIN
 				SELECT	[message] = 'That comicId does not exist.', 
@@ -737,11 +827,17 @@ CREATE PROCEDURE spAddDeleteComicTag
 				WHERE comicId = @comicId AND tagId = @tagId
 
 			END
+
 		END
 
 	END TRY BEGIN CATCH
 
 		IF(@@TRANCOUNT > 0) ROLLBACK TRAN
+		DECLARE @errorParams VARCHAR(MAX) = CONCAT(	'@comicId = ', @comicId,
+													', @tagId = ', @tagId,
+													', @delete = ', @delete
+													)
+		EXEC spSave_Error @params = @errorParams
 
 	END CATCH
 
@@ -758,8 +854,10 @@ GO
 ======================================================================== */
 CREATE PROCEDURE spGetComics
 AS BEGIN
+
 	SELECT * 
 	FROM vwComics
+
 END
 GO
 
@@ -772,9 +870,11 @@ GO
 CREATE PROCEDURE spGetComicById
 	@comicId		INT
 AS BEGIN
+
 	SELECT * 
 	FROM vwComics
 	WHERE comicId = @comicId
+
 END
 GO
 
@@ -788,15 +888,21 @@ CREATE PROCEDURE spGetComicByTitle
 	@title			VARCHAR(100),
 	@hardMatch		BIT = 0
 AS BEGIN
+
 	IF(@hardMatch = 1) BEGIN
+
 		SELECT * 
 		FROM vwComics
 		WHERE title = @title
+
 	END ELSE BEGIN
+
 		SELECT * 
 		FROM vwComics
 		WHERE title LIKE CONCAT('%', @title, '%')
+
 	END
+
 END
 GO
 
@@ -809,11 +915,13 @@ GO
 CREATE PROCEDURE spGetComicByTag
 	@tagId			INT
 AS BEGIN
+
 	SELECT c.*, t.*
 	FROM tags t
 		JOIN comicTags ct On t.tagId = ct.tagId
 		JOIN comics c ON ct.comicId = c.comicId
 	WHERE t.tagId = @tagId;
+
 END
 GO
 
@@ -826,11 +934,13 @@ GO
 CREATE PROCEDURE spGetComicByAuthor
 	@authorId		INT
 AS BEGIN
+
 	SELECT c.*, p.personId, p.fName as authorFName, p.lName as authorLName
 	FROM vwPeople p
 		JOIN comicAuthors ca On p.personId = ca.authorId
 		JOIN vwComics c ON ca.comicId = c.comicId
 	WHERE p.personId = @authorId
+
 END
 GO
 
@@ -843,11 +953,13 @@ GO
 CREATE PROCEDURE spGetComicByIllustrator
 	@illustratorId		INT
 AS BEGIN
+
 	SELECT c.*, p.personId, p.fName as illustratorFName, p.lName as illustratorLName
 	FROM vwPeople p
 		JOIN comicIllustrators ci On p.personId = ci.illustratorId
 		JOIN vwComics c ON ci.comicId = c.comicId
 	WHERE p.personId = @illustratorId
+
 END
 GO
 
@@ -860,10 +972,12 @@ GO
 CREATE PROCEDURE spGetComicByPublisher
 	@publisherId		INT
 AS BEGIN
+
 	SELECT c.*, p.publisherId, p.[name] as publisherName
 	FROM vwPublishers p
 		JOIN vwComics c ON c.publisherId = p.publisherId
 	WHERE p.publisherId = @publisherId
+
 END
 GO
 
@@ -876,10 +990,12 @@ GO
 CREATE PROCEDURE spGetComicByFileType
 	@fileTypeId			INT
 AS BEGIN
+
 	SELECT c.*, ft.[value] as fileType
 	FROM fileTypes ft
 		JOIN vwComics c ON ft.fileTypeId = c.filetypeId
 	WHERE ft.fileTypeId = @fileTypeId
+
 END
 GO
 
@@ -891,8 +1007,10 @@ GO
 ======================================================================== */
 CREATE PROCEDURE spGetPeople
 AS BEGIN
+
 	SELECT *
 	FROM vwPeople
+
 END
 GO
 
@@ -905,10 +1023,13 @@ GO
 CREATE PROCEDURE spGetPeopleById
 	@personId			INT
 AS BEGIN
+
 	SELECT *
 	FROM vwPeople
 	WHERE personId = @personId
+
 END
+
 GO
 
 /* =====================================================================
@@ -922,17 +1043,23 @@ CREATE PROCEDURE spGetPeopleByName
 	@lName				VARCHAR(64),
 	@hardMatch			BIT = 0
 AS BEGIN
+
 	IF (@hardMatch = 1) BEGIN
+
 		SELECT *
 		FROM vwPeople
 		WHERE	(fName = @fName) AND 
 				(lName = @lName)
+
 	END ELSE BEGIN
+
 		SELECT *
 		FROM vwPeople
 		WHERE	(fName LIKE CONCAT('%', @fName, '%')) AND
 				(lName LIKE CONCAT('%', @lName, '%'))
+
 	END
+
 END
 GO
 
@@ -944,8 +1071,10 @@ GO
 ======================================================================== */
 CREATE PROCEDURE spGetPublishers
 AS BEGIN
+
 	SELECT *
 	FROM vwPublishers
+
 END
 GO
 
@@ -958,9 +1087,11 @@ GO
 CREATE PROCEDURE spGetPublishersById
 	@publisherId		INT
 AS BEGIN
+
 	SELECT *
 	FROM vwPublishers
 	WHERE publisherId = @publisherId
+
 END
 GO
 
@@ -974,43 +1105,75 @@ CREATE PROCEDURE spGetPublishersByName
 	@publisherName		VARCHAR(64),
 	@hardMatch			BIT = 0
 AS BEGIN
+
 	IF (@hardMatch = 1) BEGIN
+
 		SELECT *
 		FROM vwPublishers
 		WHERE [name] = @publisherName
+
 	END ELSE BEGIN
+
 		SELECT *
 		FROM vwPublishers
 		WHERE [name] LIKE CONCAT('%', @publisherName, '%')
+
 	END
+
 END
 GO
 
 /* =====================================================================
 
 	Name:           spGetComicAuthors
-	Purpose:        Gets a list of all comic authors from the database.
+	Purpose:        Gets a list of all comic authors from the database
+					or a specific list of authors of a comic.
 
 ======================================================================== */
 CREATE PROCEDURE spGetComicAuthors
+	@comicId		INT = 0
 AS BEGIN
-	SELECT *
-	FROM vwPeople
-	WHERE personId IN (SELECT authorId FROM comicAuthors)
+	IF (@comicId = 0) BEGIN
+
+		SELECT *
+		FROM vwPeople
+		WHERE personId IN (SELECT authorId FROM comicAuthors)
+
+	END ELSE BEGIN
+
+		SELECT p.*
+		FROM vwPeople p
+			JOIN comicAuthors ca ON p.personId = ca.authorId
+		WHERE ca.comicId = @comicId
+
+	END
 END
 GO
 
 /* =====================================================================
 
 	Name:           spGetComicIllustrator
-	Purpose:        Gets a list of all comic illustrators from the database.
+	Purpose:        Gets a list of all comic illustrators from the database
+					or a specific list of illustrators of a comic.
 
 ======================================================================== */
 CREATE PROCEDURE spGetComicIllustrator
+	@comicId		INT = 0
 AS BEGIN
-	SELECT *
-	FROM vwPeople
-	WHERE personId IN (SELECT illustratorId FROM comicIllustrators)
+	IF (@comicId = 0) BEGIN
+
+		SELECT *
+		FROM vwPeople
+		WHERE personId IN (SELECT illustratorId FROM comicIllustrators)
+
+	END ELSE BEGIN
+
+		SELECT p.*
+		FROM vwPeople p
+			JOIN comicIllustrators ci ON p.personId = ci.illustratorId
+		WHERE ci.comicId = @comicId
+
+	END
 END
 GO
 
@@ -1022,8 +1185,10 @@ GO
 ======================================================================== */
 CREATE PROCEDURE spGetTags
 AS BEGIN
+
 	SELECT *
 	FROM tags
+
 END
 GO
 
@@ -1036,10 +1201,12 @@ GO
 CREATE PROCEDURE spGetTagsByComic
 	@comicId		INT
 AS BEGIN
+
 	SELECT t.*
 	FROM comicTags ct
 		JOIN tags t ON ct.tagId = t.tagId
 	WHERE ct.comicId = @comicId
+
 END
 GO
 
@@ -1089,10 +1256,10 @@ INSERT INTO comics (comicId, title, filetypeId, publisherId, publicationDate, [d
 		(14, 'Deadman #1', 1, 5, '2017-11-01', '"ôJourney into Deathö part one! When we last left Deadman, the true story had barely begun! DeadmanÆs death was unsolved, and his fate was intertwined with that of his parents and siblings. Even the Dark Night Detective couldnÆt solve the mysteries of Boston BrandÆs fantastic secrets! Now, Batman is back, confronting Deadman about who was really behind his death. Was Boston BrandÆs assassination a test for the League of Assassins? Why does Batman think RaÆs al Ghul was involved? And why does Deadman need the help of Zatanna, Phantom Stranger, Dr. Fate and the Spectre to defend Nanda Parbat?"', 'N/A', '/home/media/Comics/Deadman-#1.cbr'),
 		(15, 'Something is Killing the Children #2', 1, 1, '2019-10-16', '"Children are dying in the town of ArcherÆs Peak and the ones who survive bring back terrible stories. A strange woman named Erica Slaughter has appeared and says she fights these monsters behind the murders, but that canÆt possibly be true. Monsters arenÆt realà are they?"', 'N/A', '/home/media/Comics/Something-is-Killing-the-Children-#2.cbr'),
 		(16, 'iZombie #3', 1, 7, '2010-07-07', '"Unless zombie gravedigger Gwen Dylan eats a dead perso''s brain once a month, she loses her memories. The trouble is, for the week following a feeding, she shares her head with the dead perso''s final thoughts and has to complete any unfinished business they''ve left behind. In this case, it involves solving the murder of Dead Fred."', 'N/A', '/home/media/Comics/iZombie-#3.cbr'),
-		(17, 'Over the Garden Wall #2', 1, 1, '2015-01-01', '"OVER THE GARDEN WALL #2 BOOM! STUDIOS (W) Pat McHale (A/CA) Jim Campbell The Tale of Fred the Horse! This issue takes place between episodes 4-5 of the Cartoon Network miniseries and tells the story of Fred, a down-on-his-luck horse who finds himself in trouble with the Highwayman."', 'N/A', '/home/media/Comics/Over-the-Garden-Wall-#2.cbr'),
-		(18, 'Locke & Key #5', 1, 6, '2010-01-01', '"Single issue comic book format; Award winning suspense-horror series from Joe Hill(Horns, NOS4A@)."', 'N/A', '/home/media/Comics/Locke-&-Key-#5.cbr'),
-		(19, 'Ghosted In L.A. #6', 1, 1, '2019-12-04', 'It''s never a good thing when your ex has a crush on your roommate. It''s awkward enough that the part where Daphne''s roommates are all ghosts is''t even the weirdest part of the situation. Daphne is about to learn that personal drama does''t stop when your heart does.', 'N/A', '/home/media/Comics/Ghosted-In-L.A.-#6.cbr'),
-		(20, 'Folklords #3', 1, 1, '2020-01-22', '"Outside of the village, life is no fairy tale-and Ansel has learned this the hard way. Betrayed by one of his traveling companions, Ansel finds himself at the mercy of Hanz and Greta. He needs to escape before the worst happens, but the siblings have a story for him, and the truth is more gruesome than he could have imagined."', 'N/A', '/home/media/Comics/Folklords-#3.cbr')
+		(17, 'Over the Garden Wall #2', 2, 1, '2015-01-01', '"OVER THE GARDEN WALL #2 BOOM! STUDIOS (W) Pat McHale (A/CA) Jim Campbell The Tale of Fred the Horse! This issue takes place between episodes 4-5 of the Cartoon Network miniseries and tells the story of Fred, a down-on-his-luck horse who finds himself in trouble with the Highwayman."', 'N/A', '/home/media/Comics/Over-the-Garden-Wall-#2.cbz'),
+		(18, 'Locke & Key #5', 2, 6, '2010-01-01', '"Single issue comic book format; Award winning suspense-horror series from Joe Hill(Horns, NOS4A@)."', 'N/A', '/home/media/Comics/Locke-&-Key-#5.cbz'),
+		(19, 'Ghosted In L.A. #6', 2, 1, '2019-12-04', 'It''s never a good thing when your ex has a crush on your roommate. It''s awkward enough that the part where Daphne''s roommates are all ghosts is''t even the weirdest part of the situation. Daphne is about to learn that personal drama does''t stop when your heart does.', 'N/A', '/home/media/Comics/Ghosted-In-L.A.-#6.cbz'),
+		(20, 'Folklords #3', 2, 1, '2020-01-22', '"Outside of the village, life is no fairy tale-and Ansel has learned this the hard way. Betrayed by one of his traveling companions, Ansel finds himself at the mercy of Hanz and Greta. He needs to escape before the worst happens, but the siblings have a story for him, and the truth is more gruesome than he could have imagined."', 'N/A', '/home/media/Comics/Folklords-#3.cbz')
 SET IDENTITY_INSERT comics OFF
 GO
 
@@ -1344,6 +1511,12 @@ EXEC spGetComicAuthors
 -- Gets all illustrators.
 EXEC spGetComicIllustrator
 
+-- Gets all authors of Folklords #3.
+EXEC spGetComicAuthors 20
+
+-- Gets all illustrators of Folklords #3.
+EXEC spGetComicIllustrator 20
+
 -- Gets Harry Peters
 EXEC spGetPeopleById 41
 
@@ -1359,8 +1532,8 @@ EXEC spGetComicByAuthor 40
 -- Gets comics by Harry Peter
 EXEC spGetComicByIllustrator 41
 
--- Get comics by .ZIP
-EXEC spGetComicByFileType 3
+-- Get comics by .CBZ
+EXEC spGetComicByFileType 2
 
 -- Get comics by DC
 EXEC spGetComicByPublisher 5
@@ -1392,8 +1565,8 @@ EXEC spGetPublishersByName 'Bo', 1
 -- Gets all tags.
 EXEC spGetTags
 
--- Gets tags of Wonder Woman #1.
-EXEC spGetTagsByComic 21
+-- Gets tags of Faithless #2.
+EXEC spGetTagsByComic 2
 
 -- Delete all tags from Wonder Woman #1
 EXEC spAddDeleteComicTag 21, 14, 1
@@ -1414,13 +1587,13 @@ EXEC spAddUpdateDeletePerson 40, 'William', 'Marston', 1
 -- Remove Wonder Woman #1.
 EXEC spAddUpdateDeleteComic 21, 'Wonder Woman #1', 3, 5, '6/1/1942', 'Who Is She?" text story by William Moulton Marston, art by Harry G. Peter; The Gods behind the epithet, "Beautiful as Aphrodite, Wise as Athena, Strong as Hercules and Swift as Mercury", are visually and in text introduced to the reader.', 'N/A', '/home/media/Comics/Wonder-Woman-#1.zip', 1
 
+-- Hard deletes everything marked with a soft delete.
+EXEC spHardDeletePerson
+EXEC spHardDeleteComic
+EXEC spHardDeletePublisher
+
 -- Remove .ZIP filetype.
 EXEC spAddUpdateDeleteFileType 3, '.ZIP', 1
 
 -- Remove Valiant as a publisher.
 EXEC spAddUpdateDeletePublisher 9, 'Valiant', 1
-
--- Hard deletes everything marked with a soft delete.
-EXEC spHardDeletePerson
-EXEC spHardDeleteComic
-EXEC spHardDeletePublisher

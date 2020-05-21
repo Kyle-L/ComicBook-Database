@@ -16,6 +16,9 @@ The ![create_comic.sql](create_comic.sql) file contains opertations to create th
 
 <a name="stored-proc"/></a>
 ## Stored Procedures
+- spSave_Error
+  - Saves an error to the database.
+
 - spAddUpdateDeleteTag
   - Adds/Updates/Deletes a tag to/from the database.
 
