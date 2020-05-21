@@ -11,7 +11,7 @@ This is the repository for the development of a comic book database project in !
 The ![create_comic.sql](create_comic.sql) file contains opertations to create the tables, views, stored procedures, and insert mock data in the database.
 
 <a name="erd"/></a>
-## Media
+## Entity Relationship Diagram
 ![Entity Relationship Diagram](ERD.png)
 
 <a name="stored-proc"/></a>
