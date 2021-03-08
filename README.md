@@ -1,4 +1,4 @@
-# Comic Book Database
+# Comic Database
 
 - [Overview](#overview)
 - [Entity Relationship Diagram](#erd)
